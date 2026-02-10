@@ -2,43 +2,57 @@ import time
 import cloudscraper
 import json
 
-def fetch_server_channels(server_id, logger=print, cookies_dict=None):
+def fetch_server_channels(server_id, logger=print, cookies_dict=None, base_kemono_domain='kemono.cr'):
     """
     Fetches all channels for a given Discord server ID from the API.
     Uses cloudscraper to bypass Cloudflare.
     """
-    api_url = f"https://kemono.cr/api/v1/discord/server/{server_id}"
+    api_url = f"https://{base_kemono_domain}/api/v1/discord/server/{server_id}"
     logger(f"   Fetching channels for server: {api_url}")
 
     scraper = cloudscraper.create_scraper()
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': f'https://kemono.cr/discord/server/{server_id}',
-        'Accept': 'text/css'
+        'Referer': f'https://{base_kemono_domain}/discord/server/{server_id}',
+        'Accept': 'application/json, text/plain, */*'
     }
 
     try:
         response = scraper.get(api_url, headers=headers, cookies=cookies_dict, timeout=30)
         response.raise_for_status()
         channels = response.json()
+
         if isinstance(channels, list):
             logger(f"   ✅ Found {len(channels)} channels for server {server_id}.")
             return channels
+
+        if isinstance(channels, dict):
+            for key in ('channels', 'results', 'data'):
+                potential = channels.get(key)
+                if isinstance(potential, list):
+                    logger(f"   ✅ Found {len(potential)} channels for server {server_id} (from '{key}').")
+                    return potential
+
+            logger(f"   ⚠️ Channel API returned dict but no channel list keys found. Keys: {list(channels.keys())[:10]}")
+
+        else:
+            logger(f"   ⚠️ Unexpected channel API response type: {type(channels).__name__}")
+
         return None
     except Exception as e:
         logger(f"   ❌ Error fetching server channels for {server_id}: {e}")
         return None
 
-def fetch_channel_messages(channel_id, logger=print, cancellation_event=None, pause_event=None, cookies_dict=None):
+def fetch_channel_messages(channel_id, logger=print, cancellation_event=None, pause_event=None, cookies_dict=None, base_kemono_domain='kemono.cr'):
     """
     A generator that fetches all messages for a specific Discord channel, handling pagination.
     Uses cloudscraper and proper headers to bypass server protection.
     """
     scraper = cloudscraper.create_scraper()
-    base_url = f"https://kemono.cr/api/v1/discord/channel/{channel_id}"
+    base_url = f"https://{base_kemono_domain}/api/v1/discord/channel/{channel_id}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': f'https://kemono.cr/discord/channel/{channel_id}',
+        'Referer': f'https://{base_kemono_domain}/discord/channel/{channel_id}',
         'Accept': 'text/css'
     }
     

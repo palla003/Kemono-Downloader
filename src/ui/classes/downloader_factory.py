@@ -122,6 +122,9 @@ def create_downloader_thread(main_app, api_url, service, id1, id2, effective_out
         limit_text = main_app.discord_message_limit_input.text().strip()
         message_limit = int(limit_text) if limit_text.isdigit() else None
         mode = main_app.discord_download_scope # Should be 'pdf' or 'files'
+        filename_template = ""
+        if hasattr(main_app, 'discord_filename_template_input'):
+            filename_template = main_app.discord_filename_template_input.text().strip()
 
         return DiscordDownloadThread(
             mode=mode,
@@ -133,6 +136,7 @@ def create_downloader_thread(main_app, api_url, service, id1, id2, effective_out
             url=api_url,
             app_base_dir=main_app.app_base_dir,
             limit=message_limit,
+            filename_template=filename_template,
             parent=main_app # Pass main_app for events/signals
         )
 

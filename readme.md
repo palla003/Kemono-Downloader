@@ -65,7 +65,7 @@
     <li>
       <strong>Discord</strong> — Two modes for a channel URL:
       <ul>
-        <li>Download all files and attachments.</li>
+        <li>Download all files and attachments (with optional custom naming pattern using tokens like <code>{message_id}</code> and <code>{original_name}</code>).</li>
         <li>Save the entire message history as a formatted PDF.</li>
       </ul>
     </li>

@@ -108,6 +108,7 @@
   <li>When a Discord URL is entered, a <strong>Scope</strong> button appears.
     <ul>
       <li><strong>Scope: Files</strong>: Downloads all files from the channel/server.</li>
+      <li><strong>Name Pattern</strong>: Optional filename template for Discord attachments. Use tokens like <code>{channel_id}</code>, <code>{message_id}</code>, <code>{index}</code>, <code>{original_name}</code>, <code>{author}</code>, <code>{timestamp}</code>, and <code>{ext}</code>.</li>
       <li><strong>Scope: Messages</strong>: Saves the entire message history of the channel/server as a formatted PDF.</li>
     </ul>
   </li>

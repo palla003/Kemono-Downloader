@@ -1,6 +1,7 @@
 import os
 import time
 import datetime
+import re
 import requests
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -18,7 +19,7 @@ class DiscordDownloadThread(QThread):
     progress_label_signal = pyqtSignal(str)
     finished_signal = pyqtSignal(int, int, bool, list)
 
-    def __init__(self, mode, session, token, output_dir, server_id, channel_id, url, app_base_dir, limit=None, parent=None):
+    def __init__(self, mode, session, token, output_dir, server_id, channel_id, url, app_base_dir, limit=None, filename_template="", parent=None):
         super().__init__(parent)
         self.mode = mode
         self.session = session
@@ -29,9 +30,47 @@ class DiscordDownloadThread(QThread):
         self.api_url = url
         self.message_limit = limit
         self.app_base_dir = app_base_dir # Path to app's base directory
+        self.filename_template = (filename_template or "").strip()
 
         self.is_cancelled = False
         self.is_paused = False
+
+    def _safe_template_value(self, value):
+        if value is None:
+            return ""
+        return re.sub(r'[\\/:*?"<>|\n\r\t]+', '_', str(value)).strip()
+
+    def _build_filename_from_template(self, message, attachment, index_in_message):
+        original_filename = attachment.get('filename', 'unnamed')
+        base_name, extension = os.path.splitext(original_filename)
+        ext_without_dot = extension[1:] if extension.startswith('.') else extension
+
+        if not self.filename_template:
+            return original_filename
+
+        author_info = message.get('author') or {}
+        replacements = {
+            'channel_id': self.channel_id or 'server',
+            'message_id': message.get('id', ''),
+            'index': f"{index_in_message + 1:03d}",
+            'original_name': base_name,
+            'ext': ext_without_dot,
+            'author': author_info.get('username', ''),
+            'timestamp': message.get('timestamp', '')[:19].replace('T', '_').replace(':', '-'),
+        }
+
+        built_name = self.filename_template
+        for token, value in replacements.items():
+            built_name = built_name.replace(f"{{{token}}}", self._safe_template_value(value))
+
+        built_name = built_name.strip()
+        if not built_name:
+            return original_filename
+
+        if '.' not in os.path.basename(built_name) and ext_without_dot:
+            built_name = f"{built_name}.{ext_without_dot}"
+
+        return built_name
 
     def run(self):
         if self.mode == 'pdf':
@@ -144,23 +183,26 @@ class DiscordDownloadThread(QThread):
 
             for message in reversed(all_messages):
                 if self._check_events(): break
-                for attachment in message.get('attachments', []):
+                for index_in_message, attachment in enumerate(message.get('attachments', [])):
                     if self._check_events(): break
                     
                     file_url = attachment['url']
                     original_filename = attachment['filename']
-                    filepath = os.path.join(self.output_dir, original_filename)
-                    filename_to_use = original_filename
+                    preferred_filename = self._build_filename_from_template(message, attachment, index_in_message)
+                    filepath = os.path.join(self.output_dir, preferred_filename)
+                    filename_to_use = preferred_filename
 
                     counter = 1
-                    base_name, extension = os.path.splitext(original_filename)
+                    base_name, extension = os.path.splitext(preferred_filename)
                     while os.path.exists(filepath):
                         filename_to_use = f"{base_name} ({counter}){extension}"
                         filepath = os.path.join(self.output_dir, filename_to_use)
                         counter += 1
                     
-                    if filename_to_use != original_filename:
-                        self.progress_signal.emit(f"   -> Duplicate name '{original_filename}'. Saving as '{filename_to_use}'.")
+                    if preferred_filename != original_filename:
+                        self.progress_signal.emit(f"   -> Renamed '{original_filename}' to '{preferred_filename}' via pattern.")
+                    if filename_to_use != preferred_filename:
+                        self.progress_signal.emit(f"   -> Duplicate name '{preferred_filename}'. Saving as '{filename_to_use}'.")
 
                     try:
                         self.progress_signal.emit(f"   Downloading ({download_count+1}/{total_attachments}): '{filename_to_use}'...")

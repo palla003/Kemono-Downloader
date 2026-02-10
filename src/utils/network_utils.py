@@ -194,6 +194,16 @@ def extract_post_info(url_string):
         server_id, channel_id = discord_channel_match.groups()
         return 'discord', server_id, channel_id
 
+    # --- Kemono Discord URL Check (supports both server and specific channel URLs) ---
+    kemono_discord_match = re.search(
+        r'https?://(?:www\.)?kemono\.(?:cr|su|party)/discord/server/(\d+)(?:/(\d+))?/?',
+        stripped_url,
+        re.IGNORECASE
+    )
+    if kemono_discord_match:
+        server_id, channel_id = kemono_discord_match.groups()
+        return 'discord', server_id, channel_id
+
     # --- Kemono/Coomer/Discord Parsing ---
     try:
         parsed_url = urlparse(stripped_url)

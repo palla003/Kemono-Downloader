@@ -5,6 +5,7 @@ import uuid
 import threading
 import cloudscraper
 import requests
+from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt5.QtCore import QThread, pyqtSignal
 
@@ -54,6 +55,15 @@ class KemonoDiscordDownloadThread(QThread):
         self.output_dir = output_dir
         self.cookies_dict = cookies_dict
         self.parent_app = parent # Access main app's events and settings
+        self.base_kemono_domain = 'kemono.cr'
+        try:
+            if hasattr(parent, 'link_input') and parent.link_input:
+                raw_url = parent.link_input.text().strip()
+                parsed = urlparse(raw_url)
+                if parsed.netloc:
+                    self.base_kemono_domain = parsed.netloc
+        except Exception:
+            self.base_kemono_domain = 'kemono.cr'
 
         # --- Shared Events & Internal State ---
         self.cancellation_event = getattr(parent, 'cancellation_event', threading.Event())
@@ -132,6 +142,58 @@ class KemonoDiscordDownloadThread(QThread):
             time.sleep(0.5)
         return False
 
+    def _fetch_server_channels_with_fallback(self):
+        """Fetch server channels via core helper, then fallback using this thread's scraper."""
+        channels_data = fetch_server_channels(
+            self.server_id,
+            logger=self.progress_signal.emit,
+            cookies_dict=self.cookies_dict,
+            base_kemono_domain=self.base_kemono_domain
+        )
+        if isinstance(channels_data, list):
+            return channels_data
+
+        if not self.scraper:
+            return None
+
+        try:
+            self.progress_signal.emit("   ⚠️ Primary channel fetch failed. Trying fallback request...")
+        except Exception:
+            pass
+
+        api_url = f"https://{self.base_kemono_domain}/api/v1/discord/server/{self.server_id}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': f'https://{self.base_kemono_domain}/discord/server/{self.server_id}',
+            'Accept': 'application/json, text/plain, */*'
+        }
+
+        try:
+            response = self.scraper.get(api_url, headers=headers, cookies=self.cookies_dict, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+
+            if isinstance(payload, list):
+                return payload
+
+            if isinstance(payload, dict):
+                for key in ('channels', 'results', 'data'):
+                    maybe_channels = payload.get(key)
+                    if isinstance(maybe_channels, list):
+                        return maybe_channels
+
+            try:
+                self.progress_signal.emit(f"   ❌ Fallback channel fetch got unexpected response type: {type(payload).__name__}")
+            except Exception:
+                pass
+            return None
+        except Exception as e:
+            try:
+                self.progress_signal.emit(f"   ❌ Fallback channel fetch failed: {e}")
+            except Exception:
+                pass
+            return None
+
     # --- REVISED Helper: Download Single File with ONE Retry ---
     def _download_single_kemono_file(self, file_info):
         """
@@ -152,7 +214,7 @@ class KemonoDiscordDownloadThread(QThread):
         channel_id = file_info['channel_id']
         post_title = file_info.get('post_title', f"Message in channel {channel_id}")
         original_post_id_for_log = file_info.get('message_id', 'N/A')
-        base_kemono_domain = "kemono.cr"
+        base_kemono_domain = self.base_kemono_domain
 
         if not self.scraper:
              try: self.progress_signal.emit(f"   ❌ Cannot download '{original_filename}': Cloudscraper not initialized.")
@@ -369,7 +431,7 @@ class KemonoDiscordDownloadThread(QThread):
             else:
                 try: self.progress_label_signal.emit("Fetching server channels via Kemono API...")
                 except: pass
-                channels_data = fetch_server_channels(self.server_id, logger=self.progress_signal.emit, cookies_dict=self.cookies_dict)
+                channels_data = self._fetch_server_channels_with_fallback()
                 if self._check_events(): return
                 if channels_data is not None:
                     channels_to_process = channels_data
@@ -404,7 +466,8 @@ class KemonoDiscordDownloadThread(QThread):
                 message_generator = fetch_channel_messages(
                     channel_id, logger=self.progress_signal.emit,
                     cancellation_event=self.cancellation_event, pause_event=self.pause_event,
-                    cookies_dict=self.cookies_dict
+                    cookies_dict=self.cookies_dict,
+                    base_kemono_domain=self.base_kemono_domain
                 )
 
                 try:
@@ -423,7 +486,7 @@ class KemonoDiscordDownloadThread(QThread):
                                 file_path = attachment.get('path')
                                 original_filename = attachment.get('name')
                                 if file_path and original_filename:
-                                    base_kemono_domain = "kemono.cr"
+                                    base_kemono_domain = self.base_kemono_domain
                                     if not file_path.startswith('/'): file_path = '/' + file_path
                                     file_url = f"https://{base_kemono_domain}/data{file_path}"
                                     file_tasks.append({
