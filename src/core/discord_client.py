@@ -14,16 +14,30 @@ def fetch_server_channels(server_id, logger=print, cookies_dict=None):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Referer': f'https://kemono.cr/discord/server/{server_id}',
-        'Accept': 'text/css'
+        'Accept': 'application/json, text/plain, */*'
     }
 
     try:
         response = scraper.get(api_url, headers=headers, cookies=cookies_dict, timeout=30)
         response.raise_for_status()
         channels = response.json()
+
         if isinstance(channels, list):
             logger(f"   ✅ Found {len(channels)} channels for server {server_id}.")
             return channels
+
+        if isinstance(channels, dict):
+            for key in ('channels', 'results', 'data'):
+                potential = channels.get(key)
+                if isinstance(potential, list):
+                    logger(f"   ✅ Found {len(potential)} channels for server {server_id} (from '{key}').")
+                    return potential
+
+            logger(f"   ⚠️ Channel API returned dict but no channel list keys found. Keys: {list(channels.keys())[:10]}")
+
+        else:
+            logger(f"   ⚠️ Unexpected channel API response type: {type(channels).__name__}")
+
         return None
     except Exception as e:
         logger(f"   ❌ Error fetching server channels for {server_id}: {e}")
