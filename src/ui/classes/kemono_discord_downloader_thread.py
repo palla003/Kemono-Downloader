@@ -132,6 +132,53 @@ class KemonoDiscordDownloadThread(QThread):
             time.sleep(0.5)
         return False
 
+    def _fetch_server_channels_with_fallback(self):
+        """Fetch server channels via core helper, then fallback using this thread's scraper."""
+        channels_data = fetch_server_channels(self.server_id, logger=self.progress_signal.emit, cookies_dict=self.cookies_dict)
+        if isinstance(channels_data, list):
+            return channels_data
+
+        if not self.scraper:
+            return None
+
+        try:
+            self.progress_signal.emit("   ⚠️ Primary channel fetch failed. Trying fallback request...")
+        except Exception:
+            pass
+
+        api_url = f"https://kemono.cr/api/v1/discord/server/{self.server_id}"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': f'https://kemono.cr/discord/server/{self.server_id}',
+            'Accept': 'application/json, text/plain, */*'
+        }
+
+        try:
+            response = self.scraper.get(api_url, headers=headers, cookies=self.cookies_dict, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+
+            if isinstance(payload, list):
+                return payload
+
+            if isinstance(payload, dict):
+                for key in ('channels', 'results', 'data'):
+                    maybe_channels = payload.get(key)
+                    if isinstance(maybe_channels, list):
+                        return maybe_channels
+
+            try:
+                self.progress_signal.emit(f"   ❌ Fallback channel fetch got unexpected response type: {type(payload).__name__}")
+            except Exception:
+                pass
+            return None
+        except Exception as e:
+            try:
+                self.progress_signal.emit(f"   ❌ Fallback channel fetch failed: {e}")
+            except Exception:
+                pass
+            return None
+
     # --- REVISED Helper: Download Single File with ONE Retry ---
     def _download_single_kemono_file(self, file_info):
         """
@@ -369,7 +416,7 @@ class KemonoDiscordDownloadThread(QThread):
             else:
                 try: self.progress_label_signal.emit("Fetching server channels via Kemono API...")
                 except: pass
-                channels_data = fetch_server_channels(self.server_id, logger=self.progress_signal.emit, cookies_dict=self.cookies_dict)
+                channels_data = self._fetch_server_channels_with_fallback()
                 if self._check_events(): return
                 if channels_data is not None:
                     channels_to_process = channels_data
