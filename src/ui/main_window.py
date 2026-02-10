@@ -3850,6 +3850,8 @@ class DownloaderApp (QWidget ):
         self.discord_scope_toggle_button.setVisible(is_any_discord_url)
         if hasattr(self, 'discord_message_limit_input'):
             self.discord_message_limit_input.setVisible(is_official_discord_url)
+        if hasattr(self, 'discord_filename_template_input'):
+            self.discord_filename_template_input.setVisible(is_official_discord_url and self.discord_download_scope == 'files')
 
         if is_any_discord_url: 
             self._update_discord_scope_button_text()
@@ -3868,6 +3870,9 @@ class DownloaderApp (QWidget ):
     def _cycle_discord_scope(self):
         """Toggles between 'files' and 'messages' for Discord downloads."""
         self.discord_download_scope = 'messages' if self.discord_download_scope == 'files' else 'files'
+        if hasattr(self, 'discord_filename_template_input'):
+            is_official_discord_url = 'discord.com' in self.link_input.text().strip() and extract_post_info(self.link_input.text().strip())[0] == 'discord'
+            self.discord_filename_template_input.setVisible(is_official_discord_url and self.discord_download_scope == 'files')
         self._update_discord_scope_button_text()
 
     def get_dark_theme(self, scale=1):
@@ -4941,6 +4946,8 @@ class DownloaderApp (QWidget ):
             self.save_discord_as_pdf_btn.setVisible(is_discord)
         if hasattr(self, 'discord_message_limit_input'):
             self.discord_message_limit_input.setVisible(is_discord)
+        if hasattr(self, 'discord_filename_template_input'):
+            self.discord_filename_template_input.setVisible(is_discord and self.discord_download_scope == 'files')
         if is_discord:
             self._update_discord_scope_button_text()
         else:
@@ -5941,6 +5948,7 @@ class DownloaderApp (QWidget ):
         self .custom_folder_input .clear ();self .character_input .clear ();
         self .skip_words_input .clear ();self .start_page_input .clear ();self .end_page_input .clear ();self .new_char_input .clear ();
         if hasattr (self ,'remove_from_filename_input'):self .remove_from_filename_input .clear ()
+        if hasattr (self ,'discord_filename_template_input'):self .discord_filename_template_input .clear ()
         self .character_search_input .clear ();self .thread_count_input .setText ("4");self .radio_all .setChecked (True );
         self .skip_zip_checkbox .setChecked (True );self .download_thumbnails_checkbox .setChecked (False );
         self .compress_images_checkbox .setChecked (False );self .use_subfolders_checkbox .setChecked (False );

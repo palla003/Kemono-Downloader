@@ -470,6 +470,14 @@ def setup_ui(main_app):
     main_app.discord_message_limit_input.setFixedWidth(int(80 * scale))
     main_app.discord_message_limit_input.setVisible(False)
     discord_controls_layout.addWidget(main_app.discord_message_limit_input)
+    main_app.discord_filename_template_input = QLineEdit(main_app)
+    main_app.discord_filename_template_input.setPlaceholderText("Name Pattern")
+    main_app.discord_filename_template_input.setToolTip(
+        "Optional filename pattern. Tokens: {channel_id}, {message_id}, {index}, {original_name}, {ext}, {author}, {timestamp}."
+    )
+    main_app.discord_filename_template_input.setFixedWidth(int(220 * scale))
+    main_app.discord_filename_template_input.setVisible(False)
+    discord_controls_layout.addWidget(main_app.discord_filename_template_input)
     log_title_layout.addLayout(discord_controls_layout)
     main_app.manga_rename_toggle_button = QPushButton()
     main_app.manga_rename_toggle_button.setVisible(False)
